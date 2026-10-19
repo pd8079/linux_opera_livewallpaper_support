@@ -1,0 +1,13 @@
+{
+  "name": "gx-live-wallpaper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A local-only Opera GX new-tab live wallpaper extension for Linux.",
+  "type": "module",
+  "scripts": {
+    "test": "node --check app.js && node test/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=22.23.3"
+  }
+}

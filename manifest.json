@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "GX Local Live Wallpaper",
+  "version": "1.0.0",
+  "description": "A local-only animated wallpaper page for Opera GX new tabs.",
+  "permissions": [
+    "storage"
+  ],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  }
+}
