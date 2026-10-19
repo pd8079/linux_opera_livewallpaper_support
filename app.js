@@ -54,6 +54,9 @@
     currentUrl: null,
     loading: false,
     importing: false,
+    activationQueue: Promise.resolve(),
+    sourceToken: 0,
+    motionOverride: false,
     reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
     wasPlayingBeforeHidden: false
   };
@@ -294,6 +297,8 @@
   }
 
   function showFallback() {
+    state.sourceToken += 1;
+    state.loading = false;
     elements.video.pause();
     elements.video.removeAttribute("src");
     elements.video.load();
@@ -304,7 +309,7 @@
     updateControls();
   }
 
-  function waitForPlayableSource(url) {
+  function waitForPlayableSource(url, token) {
     return new Promise((resolve, reject) => {
       let settled = false;
       const timeout = window.setTimeout(() => finish(false, new Error("The video took too long to load.")), 15000);
@@ -324,10 +329,18 @@
       }
 
       function onCanPlay() {
+        if (token !== state.sourceToken) {
+          finish(false, new Error("Wallpaper activation was superseded."));
+          return;
+        }
         finish(true);
       }
 
       function onError() {
+        if (token !== state.sourceToken) {
+          finish(false, new Error("Wallpaper activation was superseded."));
+          return;
+        }
         finish(false, new Error(mediaErrorMessage(elements.video)));
       }
 
@@ -342,16 +355,22 @@
     if (!record?.blob) return false;
     const oldUrl = state.currentUrl;
     const url = URL.createObjectURL(record.blob);
+    const token = state.sourceToken + 1;
+    state.sourceToken = token;
     state.loading = true;
     try {
-      await waitForPlayableSource(url);
+      await waitForPlayableSource(url, token);
+      if (token !== state.sourceToken) {
+        URL.revokeObjectURL(url);
+        return false;
+      }
       state.currentUrl = url;
       state.currentRecord = record;
       elements.body.classList.remove("is-fallback");
       applyVideoPreferences();
       if (oldUrl) URL.revokeObjectURL(oldUrl);
       state.loading = false;
-      if (state.prefs.paused) {
+      if (state.prefs.paused || (state.reducedMotion && !state.motionOverride)) {
         elements.video.pause();
       } else {
         await tryPlay(false);
@@ -359,6 +378,7 @@
       updateControls();
       return true;
     } catch {
+      if (token !== state.sourceToken) return false;
       state.loading = false;
       URL.revokeObjectURL(url);
       elements.video.pause();
@@ -385,7 +405,7 @@
     }
   }
 
-  async function selectWallpaper(id, suppliedRecord = null) {
+  async function selectWallpaperNow(id, suppliedRecord = null) {
     const previousId = state.currentId;
     const previousRecord = state.currentRecord;
     const record = suppliedRecord || findRecord(id);
@@ -415,6 +435,15 @@
     renderLibrary();
     updateControls();
     return true;
+  }
+
+  // All operations that replace the shared video element run in order. This
+  // prevents a slow decoder event from making an older click win over a newer
+  // wallpaper selection or import.
+  function selectWallpaper(id, suppliedRecord = null) {
+    const operation = state.activationQueue.then(() => selectWallpaperNow(id, suppliedRecord));
+    state.activationQueue = operation.catch(() => {});
+    return operation;
   }
 
   function renderLibrary() {
@@ -572,6 +601,7 @@
     elements.playPause.addEventListener("click", () => {
       if (!state.currentRecord) return;
       if (elements.video.paused) {
+        state.motionOverride = true;
         state.prefs.paused = false;
         void savePrefs({ paused: false });
         void tryPlay(true);
@@ -619,11 +649,12 @@
     elements.video.addEventListener("error", () => {
       if (state.loading || !state.currentRecord) return;
       const failedName = state.currentRecord.name;
+      const failure = mediaErrorMessage(elements.video);
       showFallback();
       state.currentId = BUILTIN_ID;
       void savePrefs({ activeId: BUILTIN_ID });
       renderLibrary();
-      setStatus(`${failedName}: ${mediaErrorMessage(elements.video)} The fallback is active.`, "error");
+      setStatus(`${failedName}: ${failure} The fallback is active.`, "error");
     });
     elements.video.addEventListener("play", updateControls);
     elements.video.addEventListener("pause", updateControls);
@@ -639,7 +670,6 @@
   }
 
   async function init() {
-    wireEvents();
     showFallback();
     applyAccent(DEFAULT_PREFS.accent);
     applyVideoPreferences();
@@ -647,7 +677,7 @@
 
     const stored = await readStoredPrefs();
     state.prefs = { ...DEFAULT_PREFS, ...stored };
-    if (state.reducedMotion && !Object.prototype.hasOwnProperty.call(stored, "paused")) {
+    if (state.reducedMotion) {
       state.prefs.paused = true;
     }
     applyAccent(state.prefs.accent);
@@ -665,6 +695,7 @@
       elements.storageNote.textContent = "IndexedDB unavailable · imports are session-only";
     }
     renderLibrary();
+    wireEvents();
 
     const desiredId = state.prefs.activeId;
     if (desiredId && desiredId !== BUILTIN_ID) {

@@ -41,8 +41,9 @@ make test
 ```
 
 The check validates the Manifest V3 shape, required files, local-only source,
-and the important persistence/playback paths. It does **not** emulate a browser
-media decoder.
+and the presence of the persistence/playback implementation paths. It does
+**not** execute IndexedDB, extension storage, a browser media decoder, or
+autoplay policy.
 
 An optional reproducible test container is included:
 
@@ -53,6 +54,26 @@ docker run --rm gx-live-wallpaper-test
 
 The browser flow still needs a real Opera GX installation and a real local
 video fixture.
+
+## Establish the installed version before diagnosing
+
+This workspace cannot query the host browser: the provided container has no
+`flatpak` command and no Opera GX binary. On Bazzite, collect the actual
+package identity and browser version before comparing reports:
+
+```bash
+flatpak list --app
+APP_ID="paste-the-application-id-from-the-row-above"
+flatpak info "$APP_ID"
+```
+
+Opera GX itself also exposes version/build details at `opera://about` (or
+`opera://version`). As external research context only, the Flathub listing and
+manifest observed on 2026-10-19 referenced Opera GX `136.0.6008.76`; a Snap
+channel listing referenced a different build. That is **not** evidence that
+your Bazaar installation has either version. Opera's general Opera 136 release
+notes mention Chromium `152.0.7977.120`, but no GX-specific source found here
+proves that exact engine revision for every GX Linux package.
 
 ## Install in Opera GX from Bazaar/Flatpak
 

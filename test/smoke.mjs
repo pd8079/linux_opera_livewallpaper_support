@@ -31,7 +31,9 @@ for (const [pattern, description] of [
   [/elements\.video\.play\(\)/, "video playback"],
   [/video\/mp4/, "MP4 validation"],
   [/video\/webm/, "WebM validation"],
-  [/prefers-reduced-motion/, "reduced-motion handling"]
+  [/prefers-reduced-motion/, "reduced-motion handling"],
+  [/activationQueue/, "serialized wallpaper activation"],
+  [/sourceToken/, "stale media-event protection"]
 ]) {
   assert.match(app, pattern, `app.js is missing the ${description} behavior`);
 }
